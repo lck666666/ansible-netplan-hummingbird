@@ -1,0 +1,75 @@
+---
+- name: check network tools
+  hosts: edgeworkers
+  vars_files:
+    - /etc/ansible/vars.yml
+  tasks: 
+    - name: check netplan file
+      shell: ls  /etc/netplan/*.yaml
+      register: result
+      ignore_errors: true
+    - debug:
+        msg: "netplan config file exists"
+      when: result is succeeded
+    - debug:
+        msg: "netplan config file not found"
+      when: result is failed
+
+    - name: Set netplan interface config
+      become: true
+      template:
+        src: iface.j2
+        dest: /etc/netplan/{{ item.interface }}.yaml
+        mode: '0644'
+      with_items: 
+        - "{{ interface1 }}"
+        - "{{ interface2 }}"
+      when: result is succeeded
+
+    - name: check whether netplan uses NetworkManager
+      shell: cat /etc/netplan/*.yaml | grep -v "#" | grep "renderer:\ NetworkManager"
+      register: key1
+      ignore_errors: true
+      when: result is succeeded
+    - debug:
+        msg: "netplan use NetworkManager"
+      when: result is succeeded and key1 is succeeded
+    - debug:
+        msg: "netplan does not use NetworkManager"
+      when: result is failed or key1 is failed 
+
+    - name: check whether netplan uses systemd-networkd
+      shell: cat /etc/netplan/*.yaml | grep -v "#" | grep "renderer:\ systemd-networkd"
+      register: key2
+      when: result is succeeded
+      ignore_errors: true
+    - debug:
+        msg: "netplan use systemd-networkd"
+      when: result is succeeded and key2 is succeeded 
+    - debug:
+        msg: "netplan does not use systemd-networkd"
+      when: result is failed or key2 is failed    
+
+    - name: check whether the machine uses network-manager as network service config
+      shell: service --status-all | grep "network-manager"
+      register: netmanager
+      ignore_errors: true
+      when: result is failed
+    - debug: 
+        msg: "The machine uses network-manager as network service config"
+      when: result is failed and netmanager is succeeded
+    - debug:
+        msg: "The machine does not use network-manager as network service config"
+      when: result is failed or netmanager is failed
+
+    - name: check whether the machine uses systemd-networkd as network service config
+      shell: service --status-all | grep "systemd-networkd"
+      register: networkd
+      ignore_errors: true
+      when: result is failed
+    - debug:
+        msg: "The machine uses systemd-networkd as network service config"
+      when: result is failed and networkd is succeeded
+    - debug:
+        msg: "The machine does not use systemd"
+      when: result is failed or networkd is failed

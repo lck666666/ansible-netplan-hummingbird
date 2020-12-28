@@ -1,0 +1,17 @@
+interface1:  
+  interface: ens3
+  ipv4: 
+    configured: true
+    address: 10.10.10.1/24
+  ipv6:
+    configured: false
+    address:
+interface2:
+  interface: ens4
+  ipv4:
+    configured: true
+    address: 192.168.102.3/24
+  ipv6:
+    configured: false
+    address:
+           
