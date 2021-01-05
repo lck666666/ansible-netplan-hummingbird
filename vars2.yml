@@ -1,0 +1,4 @@
+interface1:  
+  interface: eth0
+  addr: 10.10.10.3/24
+           
