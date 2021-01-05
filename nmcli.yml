@@ -1,0 +1,16 @@
+---
+- hosts: edgeworkers
+  vars_files:
+    - ~/ansible-nmcli/vars2.yml
+  tasks:
+    - name: set nmcli interface config
+      become: true
+      shell: nmcli con mod {{ item.interface }} ipv4.addresses {{ item.addr }}
+      with_items:
+        - "{{ interface1 }}"
+
+    - name: apply interface config
+      become: true
+      shell: nmcli device reapply {{ item.interface }}
+      with_items:
+        - "{{ interface1 }}"
