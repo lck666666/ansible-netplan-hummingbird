@@ -1,15 +1,34 @@
 ---
 - hosts: edgeworkers
   vars_files:
-    - ~/ansible-nmcli/vars2.yml
+    - /etc/ansible/vars2.yml
   tasks:
-    - name: set nmcli interface config
+    - name: Get nmcli connection name
       become: true
-      shell: nmcli con mod {{ item.interface }} ipv4.addresses {{ item.addr }}
+      shell: nmcli c|awk -F '  ' '/{{ item.interface }}/{print$1}'
+      register: connames
       with_items:
         - "{{ interface1 }}"
+    
+    - name: Return values
+      debug:
+        msg: "{{connames}}" 
+    
+    - name: Set connection and dev list
+      set_fact:
+        dev_con_ip_dict: "{{ dev_con_ip__dict | default([]) + [ {'dev_name': item.item.interface, 'addr': item.item.addr, 'con_name':item.stdout} ] }}"
+      with_items: "{{ connames.results }}"   
+    
+    - debug:
+        msg: "{{ dev_con_ip_dict }}"
 
-    - name: apply interface config
+    - name: Set nmcli interface config
+      become: true
+      shell: nmcli con mod {{ item.con_name }} ipv4.addresses {{ item.addr }}
+      with_items:
+         - "{{ dev_con_ip_dict }}"
+
+    - name: Apply interface config
       become: true
       shell: nmcli device reapply {{ item.interface }}
       with_items:
