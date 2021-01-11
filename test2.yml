@@ -1,0 +1,40 @@
+---
+- hosts: edgeworkers
+
+  tasks:
+    - name: Get interface name
+      set_fact:
+        if_name: "{{ item }}"
+      when: (hostvars[ansible_host]['ansible_%s' % item]|default({})).get('ipv4', {}).get('address') == ansible_host
+      with_items:
+        - "{{ ansible_interfaces }}"
+
+    - name: Get nmcli connection name
+      become: true
+      shell: nmcli c|awk -F '  ' '/{{if_name}}/{print$1}'
+      register: connames
+    
+    - name: Return values
+      debug:
+        msg: "{{connames}}" 
+    
+    - name: Set connection and dev list
+      set_fact:
+        dev_con_ip_dict: "{{ dev_con_ip_dict | default([]) + [ {'dev_name': if_name, 'addr': ansible_ipv4_addr, 'con_name':connames.stdout } ] }}"
+    
+    - debug:
+        msg: "{{ dev_con_ip_dict }}"
+
+
+    - name: Set nmcli interface config
+      become: true
+      shell: nmcli con mod {{ item.con_name }} ipv4.addresses {{ item.addr }}
+      with_items:
+         - "{{ dev_con_ip_dict }}"
+
+    - name: Apply interface config
+      become: true
+      shell: nmcli device reapply {{ item.dev_name }}
+      with_items:
+        - "{{ dev_con_ip_dict }}"
+
