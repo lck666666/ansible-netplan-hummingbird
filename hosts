@@ -23,7 +23,8 @@
 #192.168.1.100
 #192.168.1.110
 [edgeworkers]
-10.67.106.206 ansible_ssh_port=22 ansible_ssh_user=ew ansible_ssh_pass=ec@2018 ansible_sudo_pass=ec@2018
+10.67.106.206 ansible_ssh_port=22 ansible_ssh_user=ew ansible_ssh_pass=ec@2018 ansible_sudo_pass=ec@2018 ansible_ipv4_configured=true ansible_ipv4_dhcp=true ansible_ipv4_addr=10.10.10.3/24
+#10.67.107.97  ansible_ssh_port=22 ansible_ssh_user=ew ansible_ssh_pass=ec@2018 ansible_sudo_pass=ec@2018 ansible_ipv4_addr=10.10.10.5/24
 # If you have multiple hosts following a pattern you can specify
 # them like this:
 
