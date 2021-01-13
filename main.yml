@@ -1,0 +1,130 @@
+---
+- name: check network tools
+  hosts: edgeworkers
+  tasks:
+    - name: Get interface name
+      set_fact:
+        if_name: "{{ item }}"
+      when: (hostvars[ansible_host]['ansible_%s' % item]|default({})).get('ipv4', {}).get('address') == ansible_host
+      with_items:
+        - "{{ ansible_interfaces }}"
+ 
+    - name: Check netplan file
+      shell: ls  /etc/netplan/*.yaml
+      register: result
+      ignore_errors: true
+    - debug:
+        msg: "netplan config file exists"
+      when: result is succeeded
+    - debug:
+        msg: "netplan config file not found"
+      when: result is failed
+    
+    - name: Set var list
+      set_fact:
+        if_ip_dict: "{{ if_ip_dict | default([]) + [ {'interface': if_name, 'ipv4': ansible_ipv4_configured, 'ipv4_dhcp': ansible_ipv4_dhcp, 'ipv4_addr': ansible_ipv4_addr } ] }}"
+
+    - debug:
+        msg: "{{ if_ip_dict}}"
+
+    - name: Set netplan interface config
+      become: true
+      template:
+        src: netplan.j2
+        dest: /etc/netplan/{{ item.interface }}.yaml
+        mode: '0644'
+      when: result is succeeded
+      with_items:
+         - "{{ if_ip_dict }}"
+    
+    - name: Apply netplan
+      become: true
+      shell: netplan apply
+      when: result is succeeded
+
+    - name: Check whether netplan uses NetworkManager
+      shell: cat /etc/netplan/*.yaml | grep -v "#" | grep "renderer:\ NetworkManager"
+      register: key1
+      ignore_errors: true
+      when: result is succeeded
+    - debug:
+        msg: "netplan use NetworkManager"
+      when: result is succeeded and key1 is succeeded
+    - debug:
+        msg: "netplan does not use NetworkManager"
+      when: result is failed or key1 is failed 
+
+    - name: Check whether netplan uses systemd-networkd
+      shell: cat /etc/netplan/*.yaml | grep -v "#" | grep "renderer:\ systemd-networkd"
+      register: key2
+      when: result is succeeded
+      ignore_errors: true
+    - debug:
+        msg: "netplan use systemd-networkd"
+      when: result is succeeded and key2 is succeeded 
+    - debug:
+        msg: "netplan does not use systemd-networkd"
+      when: result is failed or key2 is failed    
+    
+    - name: Check whether the machine uses network-manager as network service config
+      shell: systemctl status NetworkManager | grep "Active:\ active"
+      register: netmanager
+      ignore_errors: true
+      when: result is failed
+    - debug:
+        msg: "The machine uses network-manager as network service config"
+      when: result is failed and netmanager is succeeded
+    - debug:
+        msg: "The machine does not use network-manager as network service config"
+      when: netmanager is failed
+
+    - name: Config by nmcli
+      block:
+         - name: Get interface name
+           set_fact:
+             if_name: "{{ item }}"
+           when: (hostvars[ansible_host]['ansible_%s' % item]|default({})).get('ipv4', {}).get('address') == ansible_host
+           with_items:
+             - "{{ ansible_interfaces }}"
+
+         - name: Get nmcli connection name
+           shell: nmcli c|awk -F '  ' '/{{if_name}}/{print$1}'
+           register: connames
+    
+         - name: Return values
+           debug:
+             msg: "{{connames}}" 
+    
+         - name: Set connection and dev list
+           set_fact:
+             dev_con_ip_dict: "{{ dev_con_ip_dict | default([]) + [ {'dev_name': if_name, 'addr': ansible_ipv4_addr, 'con_name':connames.stdout } ] }}"
+    
+         - debug:
+             msg: "{{ dev_con_ip_dict }}"
+
+
+         - name: Set nmcli interface config
+           shell: nmcli con mod {{ item.con_name }} ipv4.addresses {{ item.addr }}
+           with_items:
+             - "{{ dev_con_ip_dict }}"
+
+         - name: Apply interface config
+           shell: nmcli device reapply {{ item.dev_name }}
+           with_items:
+             - "{{ dev_con_ip_dict }}"
+ 
+      when: result is failed and netmanager is succeeded
+      become: true
+      ignore_errors: yes
+
+    - name: check whether the machine uses systemd-networkd as network service config
+      shell: systemctl status systemd-networkd | grep "Active:\ active"
+      register: networkd
+      ignore_errors: true
+    - debug:
+        msg: "The machine uses systemd-networkd as network service config"
+      when: result is failed and networkd is succeeded
+    - debug:
+        msg: "The machine does not use systemd-networkd as network service config"
+      when: networkd is failed
+
